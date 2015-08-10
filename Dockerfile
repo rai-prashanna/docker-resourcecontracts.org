@@ -24,36 +24,42 @@ RUN apt-get install -y \
 
 RUN a2enmod rewrite
 RUN a2enmod php5
-
-CMD ["/usr/sbin/apache2ctl", "-D", "FOREGROUND"]
-EXPOSE 80
+RUN ln -s /etc/php5/mods-available/mcrypt.ini /etc/php5/apache2/conf.d/20-mcrypt.ini
+RUN ln -s /etc/php5/mods-available/mcrypt.ini /etc/php5/cli/conf.d/20-mcrypt.ini
 
 WORKDIR /var/www/html/
 RUN git clone https://github.com/NRGI/resourcecontracts.org.git rc
 
+RUN git clone https://github.com/anjesh/pdf-processor.git
+
 RUN mkdir /shared_path
-RUN mkdir -p /shared_path/rc/{data,storage}
-RUN mkdir -p /shared_path/rc/storage/{logs,app,framework}
-RUN mkdir -p /shared_path/rc/storage/framework/{cache,sessions,views}
-RUN mkdir -p /shared_path/pdfprocessor/logs
+RUN mkdir -p /shared_path/rc
+RUN mkdir -p /shared_path/rc/data
+RUN mkdir -p /shared_path/rc/storage
+RUN mkdir -p /shared_path/rc/storage/logs
+RUN mkdir -p /shared_path/rc/storage/app
+RUN mkdir -p /shared_path/rc/storage/framework
+RUN mkdir -p /shared_path/rc/storage/framework/cache
+RUN mkdir -p /shared_path/rc/storage/framework/sessions
+RUN mkdir -p /shared_path/rc/storage/framework/views
+RUN mkdir -p /shared_path/pdf-processor/logs
 RUN chmod -R 777 /shared_path
 
 RUN rm -rf /var/www/html/rc/storage
 RUN ln -s /shared_path/rc/storage/ /var/www/html/rc/storage
 RUN ln -s /shared_path/rc/data/ /var/www/html/rc/public/data
+RUN rm -rf /var/www/html/pdfprocessor/logs
+RUN ln -s /shared_path/pdfprocessor/logs/ /var/www/html/pdf-processor/logs
 
 WORKDIR /var/www/html/rc
 RUN curl -s http://getcomposer.org/installer | php
-RUN php composer.phar install
+RUN php composer.phar install --prefer-source
 RUN php composer.phar dump-autoload --optimize
 RUN php artisan clear-compiled
 
-CMD /etc/init.d/beanstalkd start
 ADD conf/supervisord.conf /etc/supervisord.conf
-CMD /etc/init.d/supervisord start
-
-WORKDIR /var/www/html
-RUN git clone https://github.com/anjesh/pdf-processor.git
 
 ADD conf/.env /var/www/html/rc/.env
 
+EXPOSE 80
+CMD /etc/init.d/beanstalkd start && supervisord -c /etc/supervisord.conf && /usr/sbin/apache2ctl -D FOREGROUND
